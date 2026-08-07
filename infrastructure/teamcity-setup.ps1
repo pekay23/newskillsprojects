@@ -161,8 +161,8 @@ foreach ($service in $services) {
                 vcsRootEntries = @{
                     vcsRootEntry = @(
                         @{
-                            vcs-root = @{ id = $vcsRootId }
-                            checkout-rules = ""
+                            "vcs-root" = @{ id = $vcsRootId }
+                            "checkout-rules" = ""
                         }
                     )
                 }
