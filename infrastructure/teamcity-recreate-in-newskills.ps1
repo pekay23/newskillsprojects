@@ -1,49 +1,31 @@
-# teamcity-setup.ps1 - Creates the Dev/Staging/Prod build configurations in TeamCity
-# Usage: .\infrastructure\teamcity-setup.ps1
+# teamcity-recreate-in-newskills.ps1 - Deletes rg-* configs from RaymondGrayPlatform and recreates them in Newskillsprojects
+# Usage: .\infrastructure\teamcity-recreate-in-newskills.ps1
 #
-# Populates the existing "Newskillsprojects" project with 18 build configs
-# (6 services x dev/staging/prod) using the existing VCS root
-# (Newskillsprojects_HttpsGithubComPekay23newskillsprojectsRefsHeadsMain).
-#
-# Optional: -ProjectId "Newskillsprojects" -VcsRootId "Newskillsprojects_HttpsGithubComPekay23newskillsprojectsRefsHeadsMain"
+# Because TeamCity build type IDs are globally unique, we must DELETE the
+# rg_* build types from RaymondGrayPlatform, then recreate them in Newskillsprojects.
 
 param(
     [string]$TeamCityUrl = "",
     [string]$Username = "",
-    [string]$Password = "",
-    [string]$ProjectId = "Newskillsprojects",
-    [string]$ProjectName = "Newskillsprojects",
-    [string]$VcsRootId = "Newskillsprojects_HttpsGithubComPekay23newskillsprojectsRefsHeadsMain",
-    [string]$VcsRootName = "newskillsprojects-github",
-    [string]$GitHubUrl = ""
+    [string]$Password = ""
 )
 
 $ErrorActionPreference = "Stop"
 
-# ================================================================
-# LOAD CREDENTIALS FROM .env FILE (gitignored, safe)
-# ================================================================
+# Load credentials from .env
 $envFile = Join-Path $PSScriptRoot ".env"
 if (Test-Path $envFile) {
-    Write-Host "Loading credentials from $envFile..." -ForegroundColor Gray
     Get-Content $envFile | ForEach-Object {
         if ($_ -match '^\s*([A-Z_]+)="?(.+?)"?\s*$') {
-            $name = $Matches[1]
-            $value = $Matches[2]
-            Set-Variable -Name $name -Value $value -Scope Script
+            Set-Variable -Name $Matches[1] -Value $Matches[2] -Scope Script
         }
     }
 }
 
-# Use .env values as defaults if params not provided
 if (-not $TeamCityUrl) { $TeamCityUrl = $TEAMCITY_URL }
 if (-not $Username) { $Username = $TEAMCITY_USERNAME }
 if (-not $Password) { $Password = $TEAMCITY_PASSWORD }
-if (-not $GitHubUrl) { $GitHubUrl = $GITHUB_REPO_URL }
 
-# ================================================================
-# AUTHENTICATION
-# ================================================================
 $pair = "${Username}:${Password}"
 $base64 = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes($pair))
 $headers = @{
@@ -52,23 +34,37 @@ $headers = @{
     "Accept" = "application/json"
 }
 
-Write-Host "=== TeamCity Build Setup ===" -ForegroundColor Cyan
-Write-Host "Connecting to $TeamCityUrl as $Username..."
+$projectId = "Newskillsprojects"
+$vcsRootId = "Newskillsprojects_HttpsGithubComPekay23newskillsprojectsRefsHeadsMain"
 
-try {
-    $server = Invoke-RestMethod -Uri "$TeamCityUrl/app/rest/server" -Headers $headers -Method Get
-    Write-Host "Connected to TeamCity $($server.version)" -ForegroundColor Green
-} catch {
-    Write-Host "Failed to connect: $($_.Exception.Message)" -ForegroundColor Red
-    exit 1
+$buildTypeIds = @(
+    "rg_workorder_dev", "rg_workorder_staging", "rg_workorder_prod",
+    "rg_cmms_dev", "rg_cmms_staging", "rg_cmms_prod",
+    "rg_helpdesk_dev", "rg_helpdesk_staging", "rg_helpdesk_prod",
+    "rg_api_gateway_dev", "rg_api_gateway_staging", "rg_api_gateway_prod",
+    "rg_sync_agent_dev", "rg_sync_agent_staging", "rg_sync_agent_prod",
+    "rg_report_engine_dev", "rg_report_engine_staging", "rg_report_engine_prod"
+)
+
+# ================================================================
+# STEP 1: DELETE old build configs from RaymondGrayPlatform
+# ================================================================
+Write-Host "=== Step 1: Deleting old build configs from RaymondGrayPlatform ===" -ForegroundColor Cyan
+
+foreach ($bt in $buildTypeIds) {
+    try {
+        Invoke-RestMethod -Uri "$TeamCityUrl/app/rest/buildTypes/$bt" -Headers $headers -Method Delete | Out-Null
+        Write-Host "  Deleted $bt" -ForegroundColor Green
+    } catch {
+        Write-Host "  Failed to delete $bt : $($_.Exception.Message)" -ForegroundColor Red
+    }
 }
 
-Write-Host "`n[1/4] Using existing project '$projectName' (id: $projectId)" -ForegroundColor Yellow
-Write-Host "  VCS Root: $vcsRootName (id: $vcsRootId)"
+# ================================================================
+# STEP 2: Recreate build configs in Newskillsprojects
+# ================================================================
+Write-Host "`n=== Step 2: Creating build configs in Newskillsprojects ===" -ForegroundColor Cyan
 
-# ================================================================
-# 2. CREATE BUILD CONFIG SHELLS
-# ================================================================
 $services = @(
     @{ name = "rg-workorder"; folder = "rg-workorder-service" },
     @{ name = "rg-cmms"; folder = "rg-cmms-service" },
@@ -84,38 +80,6 @@ $environments = @(
     @{ name = "prod"; branch = "main"; desc = "Production" }
 )
 
-Write-Host "`n[2/4] Creating build configuration shells..." -ForegroundColor Yellow
-
-foreach ($service in $services) {
-    foreach ($env in $environments) {
-        $btId = "$($service.name -replace '-', '_')_$($env.name)"
-        $btName = "$($service.name)-$($env.name)"
-        $btDesc = "Builds and tests $($service.name) on the $($env.branch) branch. $($env.desc) environment."
-
-        Write-Host "  Creating $btName..." -ForegroundColor Gray
-        try {
-            $btBody = @{
-                id = $btId
-                name = $btName
-                project = @{ id = $projectId }
-                description = $btDesc
-            } | ConvertTo-Json -Depth 3
-
-            Invoke-RestMethod -Uri "$TeamCityUrl/app/rest/buildTypes" -Headers $headers -Method Post -Body $btBody | Out-Null
-            Write-Host "    Created" -ForegroundColor Green
-        } catch {
-            if ($_.Exception.Message -match "already exists") { Write-Host "    Already exists" -ForegroundColor Yellow }
-            else { Write-Host "    Error: $($_.Exception.Message)" -ForegroundColor Red }
-        }
-    }
-}
-
-# ================================================================
-# 3. ATTACH VCS ROOT + ADD TRIGGERS + ADD STEPS
-# ================================================================
-Write-Host "`n[3/4] Attaching VCS, adding triggers and steps..." -ForegroundColor Yellow
-
-# Build step definitions per service
 $serviceSteps = @{
     "rg-workorder" = @(
         @{ name = "Lint"; cmd = "go vet ./... && golangci-lint run" },
@@ -152,9 +116,27 @@ foreach ($service in $services) {
     foreach ($env in $environments) {
         $btId = "$($service.name -replace '-', '_')_$($env.name)"
         $btName = "$($service.name)-$($env.name)"
+        $btDesc = "Builds and tests $($service.name) on the $($env.branch) branch. $($env.desc) environment."
+
+        Write-Host "  Creating $btName..." -ForegroundColor Gray
+
+        # Create build type
+        try {
+            $btBody = @{
+                id = $btId
+                name = $btName
+                project = @{ id = $projectId }
+                description = $btDesc
+            } | ConvertTo-Json -Depth 3
+
+            Invoke-RestMethod -Uri "$TeamCityUrl/app/rest/buildTypes" -Headers $headers -Method Post -Body $btBody | Out-Null
+            Write-Host "    Created" -ForegroundColor Green
+        } catch {
+            Write-Host "    Create error: $($_.Exception.Message)" -ForegroundColor Red
+            continue
+        }
 
         # Attach VCS root
-        Write-Host "  ${btName}: attaching VCS..." -ForegroundColor Gray
         try {
             $vcsEntry = '{"vcs-root": {"id": "' + $vcsRootId + '"}}'
             Invoke-RestMethod -Uri "$TeamCityUrl/app/rest/buildTypes/$btId/vcs-root-entries" -Headers $headers -Method Post -Body $vcsEntry | Out-Null
@@ -163,8 +145,7 @@ foreach ($service in $services) {
             Write-Host "    VCS error: $($_.Exception.Message)" -ForegroundColor Red
         }
 
-        # Add VCS trigger with branch filter
-        Write-Host "  ${btName}: adding trigger..." -ForegroundColor Gray
+        # Add VCS trigger
         try {
             $triggerBody = @{
                 type = "vcsTrigger"
@@ -185,7 +166,6 @@ foreach ($service in $services) {
         # Add build steps
         $steps = $serviceSteps[$service.name]
         foreach ($step in $steps) {
-            Write-Host "  ${btName}: adding step '$($step.name)'..." -ForegroundColor Gray
             try {
                 $stepBody = @{
                     name = $step.name
@@ -200,7 +180,7 @@ foreach ($service in $services) {
                 } | ConvertTo-Json -Depth 5
 
                 Invoke-RestMethod -Uri "$TeamCityUrl/app/rest/buildTypes/$btId/steps" -Headers $headers -Method Post -Body $stepBody | Out-Null
-                Write-Host "    Step added" -ForegroundColor Green
+                Write-Host "    Step: $($step.name)" -ForegroundColor Green
             } catch {
                 Write-Host "    Step error: $($_.Exception.Message)" -ForegroundColor Red
             }
@@ -209,16 +189,15 @@ foreach ($service in $services) {
 }
 
 # ================================================================
-# SUMMARY
+# VERIFICATION
 # ================================================================
-Write-Host "`n[4/4] Setup complete!" -ForegroundColor Green
-Write-Host ""
-Write-Host "=== Created in project: $projectName ===" -ForegroundColor Cyan
-Write-Host "  VCS Root: $vcsRootName -> $GitHubUrl"
-Write-Host "  18 build configs (6 services x dev/staging/prod)"
-Write-Host ""
-Write-Host "=== Next Steps ===" -ForegroundColor Yellow
-Write-Host "  1. Open TeamCity at $TeamCityUrl"
-Write-Host "  2. Go to each build config -> Build Steps -> set Working directory to the service folder"
-Write-Host "  3. Create dev and staging branches in GitHub"
-Write-Host "  4. Set up GitHub branch protection rules"
+Write-Host "`n=== Verification ===" -ForegroundColor Cyan
+try {
+    $b = Invoke-RestMethod -Uri "$TeamCityUrl/app/rest/buildTypes?locator=project:Newskillsprojects" -Headers $headers -Method Get
+    Write-Host "Build configs in Newskillsprojects: $($b.buildType.Count)"
+    if ($b.buildType) {
+        $b.buildType | ForEach-Object { Write-Host "  $($_.name) (id: $($_.id))" }
+    }
+} catch {
+    Write-Host "Error verifying: $($_.Exception.Message)" -ForegroundColor Red
+}
