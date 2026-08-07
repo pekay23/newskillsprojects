@@ -25,6 +25,7 @@ venv/
 src-tauri/target/
 rg-api-gateway/rg-api-gateway.exe~
 rg-sync-agent/rg-sync-agent.exe~
+*.exe
 *.pdb
 *.dll
 obj/
