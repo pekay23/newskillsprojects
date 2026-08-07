@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "notes": "Raymond Gray IFM v1.0.0",
+  "pub_date": "2026-08-07T00:00:00.000Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "",
+      "url": "https://github.com/pekay23/newskillsprojects/releases/latest/download/Raymond Gray IFM_1.0.0_x64.msi"
+    }
+  }
+}

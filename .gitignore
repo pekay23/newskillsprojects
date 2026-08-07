@@ -1,0 +1,31 @@
+# Environment files with real secrets
+infrastructure/.env
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.codegraph/
+
+# Build artifacts
+node_modules/
+__pycache__/
+*.pyc
+.next/
+dist/
+target/
+venv/
+
+# Compiled binaries (build outputs)
+src-tauri/target/
+rg-api-gateway/rg-api-gateway.exe~
+rg-sync-agent/rg-sync-agent.exe~
+*.pdb
+*.dll
+obj/
+bin/

@@ -1,0 +1,31 @@
+[package]
+name = "rg-desktop-windows"
+version = "1.0.0"
+description = "Raymond Gray IFM Desktop Application"
+authors = ["Raymond Gray"]
+edition = "2021"
+
+[lib]
+name = "rg_desktop_windows_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-process = "2"
+tauri-plugin-updater = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rusqlite = { version = "0.31", features = ["bundled"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "1"
+base64 = "0.22"
+jsonwebtoken = "9"
+
+[features]
+# This feature is used for production builds or when a dev server is not specified
+custom-protocol = ["tauri/custom-protocol"]

@@ -1,0 +1,10 @@
+source 'https://rubygems.org'
+
+gem 'sinatra'
+gem 'rackup'   # Required by Sinatra 4.x to start the server
+gem 'puma'
+gem 'pg'
+gem 'sequel'
+gem 'prawn'
+gem 'prawn-table'
+gem 'json'
