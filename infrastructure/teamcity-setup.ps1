@@ -5,14 +5,36 @@
 # Optional: -GitHubToken "ghp_xxx" (if the repo is private, pass a PAT)
 
 param(
-    [string]$TeamCityUrl = "http://localhost:8111",
-    [string]$Username = "pekay",
+    [string]$TeamCityUrl = "",
+    [string]$Username = "",
     [string]$Password = "",
-    [string]$GitHubUrl = "https://github.com/pekay23/newskillsprojects.git",
+    [string]$GitHubUrl = "",
     [string]$GitHubToken = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+# ================================================================
+# LOAD CREDENTIALS FROM .env FILE (gitignored, safe)
+# ================================================================
+$envFile = Join-Path $PSScriptRoot ".env"
+if (Test-Path $envFile) {
+    Write-Host "Loading credentials from $envFile..." -ForegroundColor Gray
+    Get-Content $envFile | ForEach-Object {
+        if ($_ -match '^\s*([A-Z_]+)="?(.+?)"?\s*$') {
+            $name = $Matches[1]
+            $value = $Matches[2]
+            Set-Variable -Name $name -Value $value -Scope Script
+        }
+    }
+}
+
+# Use .env values as defaults if params not provided
+if (-not $TeamCityUrl) { $TeamCityUrl = $TEAMCITY_URL }
+if (-not $Username) { $Username = $TEAMCITY_USERNAME }
+if (-not $Password) { $Password = $TEAMCITY_PASSWORD }
+if (-not $GitHubUrl) { $GitHubUrl = $GITHUB_REPO_URL }
+if (-not $GitHubToken) { $GitHubToken = $GITHUB_PAT }
 
 # ================================================================
 # AUTHENTICATION
