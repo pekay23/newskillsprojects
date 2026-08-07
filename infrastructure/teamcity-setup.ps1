@@ -1,12 +1,8 @@
 # teamcity-setup.ps1 - Creates the Dev/Staging/Prod build configurations in TeamCity
 # Usage: .\infrastructure\teamcity-setup.ps1 -Username "pekay" -Password "yourpw"
 #
+# Creates build configs in the existing "Raymond Gray Platform" project.
 # Optional: -GitHubToken "ghp_xxx" (if the repo is private, pass a PAT)
-#
-# This script creates:
-#   - Project: Raymond Gray IFM
-#   - VCS Root: newskillsprojects-github
-#   - Build configs for 6 services x 3 environments (dev/staging/prod)
 
 param(
     [string]$TeamCityUrl = "http://localhost:8111",
@@ -40,30 +36,17 @@ try {
     exit 1
 }
 
-$projectId = "RaymondGrayIFM"
-$projectName = "Raymond Gray IFM"
+# Target the existing project
+$projectId = "RaymondGrayPlatform"
+$projectName = "Raymond Gray Platform"
 $vcsRootId = "newskillsprojects_github"
 $vcsRootName = "newskillsprojects-github"
 
 # ================================================================
-# 1. CREATE PROJECT
+# 1. CREATE VCS ROOT (in the existing project)
 # ================================================================
-Write-Host "`n[1/5] Creating project '$projectName'..." -ForegroundColor Yellow
-try {
-    $projectBody = @{ id = $projectId; name = $projectName; description = "Raymond Gray IFM - polyglot microservices platform" } | ConvertTo-Json
-    Invoke-RestMethod -Uri "$TeamCityUrl/app/rest/projects" -Headers $headers -Method Post -Body $projectBody | Out-Null
-    Write-Host "  Project created" -ForegroundColor Green
-} catch {
-    if ($_.Exception.Message -match "already exists") { Write-Host "  Project already exists" -ForegroundColor Yellow }
-    else { Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red }
-}
+Write-Host "`n[1/4] Creating VCS Root '$vcsRootName' in '$projectName'..." -ForegroundColor Yellow
 
-# ================================================================
-# 2. CREATE VCS ROOT
-# ================================================================
-Write-Host "`n[2/5] Creating VCS Root '$vcsRootName'..." -ForegroundColor Yellow
-
-# Decide auth method: use PAT if provided, otherwise anonymous (public repo)
 $authMethod = "ANONYMOUS"
 $vcsProps = @(
     @{ name = "url"; value = $GitHubUrl },
@@ -98,12 +81,11 @@ try {
         Write-Host "  VCS Root already exists" -ForegroundColor Yellow
     } else {
         Write-Host "  Error: $($_.Exception.Message)" -ForegroundColor Red
-        # Continue anyway - build configs can still reference it if it exists
     }
 }
 
 # ================================================================
-# 3. CREATE BUILD CONFIG SHELLS (no steps/triggers yet)
+# 2. CREATE BUILD CONFIG SHELLS
 # ================================================================
 $services = @(
     @{ name = "rg-workorder"; folder = "rg-workorder-service" },
@@ -120,7 +102,7 @@ $environments = @(
     @{ name = "prod"; branch = "main"; desc = "Production" }
 )
 
-Write-Host "`n[3/5] Creating build configuration shells..." -ForegroundColor Yellow
+Write-Host "`n[2/4] Creating build configuration shells..." -ForegroundColor Yellow
 
 foreach ($service in $services) {
     foreach ($env in $environments) {
@@ -141,47 +123,66 @@ foreach ($service in $services) {
             Write-Host "    Created" -ForegroundColor Green
         } catch {
             if ($_.Exception.Message -match "already exists") { Write-Host "    Already exists" -ForegroundColor Yellow }
-            elseif ($_.Exception.Message -match "400") {
-                Write-Host "    Bad request - body: $btBody" -ForegroundColor DarkYellow
-                Write-Host "    Error: $($_.Exception.Message)" -ForegroundColor Red
-            }
             else { Write-Host "    Error: $($_.Exception.Message)" -ForegroundColor Red }
         }
     }
 }
 
 # ================================================================
-# 4. ATTACH VCS ROOT TO EACH BUILD CONFIG
+# 3. ATTACH VCS ROOT + ADD TRIGGERS + ADD STEPS
 # ================================================================
-Write-Host "`n[4/5] Attaching VCS root to build configs..." -ForegroundColor Yellow
+Write-Host "`n[3/4] Attaching VCS, adding triggers and steps..." -ForegroundColor Yellow
+
+# Build step definitions per service
+$serviceSteps = @{
+    "rg-workorder" = @(
+        @{ name = "Lint"; cmd = "go vet ./... && golangci-lint run" },
+        @{ name = "Test"; cmd = "go test ./... -race -coverprofile=coverage.out" },
+        @{ name = "Build"; cmd = "go build -o bin/server ./cmd/server" }
+    )
+    "rg-cmms" = @(
+        @{ name = "Restore"; cmd = "dotnet restore" },
+        @{ name = "Build"; cmd = "dotnet build --no-restore --configuration Release" },
+        @{ name = "Test"; cmd = "dotnet test --no-build --configuration Release" }
+    )
+    "rg-helpdesk" = @(
+        @{ name = "Install"; cmd = "pip install -r requirements.txt" },
+        @{ name = "Lint"; cmd = "ruff check . && mypy ." },
+        @{ name = "Test"; cmd = "pytest tests/ -v" }
+    )
+    "rg-api-gateway" = @(
+        @{ name = "Lint"; cmd = "go vet ./..." },
+        @{ name = "Test"; cmd = "go test ./..." },
+        @{ name = "Build"; cmd = "go build -o rg-api-gateway.exe ./cmd/gateway" }
+    )
+    "rg-sync-agent" = @(
+        @{ name = "Test"; cmd = "go test ./..." },
+        @{ name = "Build"; cmd = "go build -o rg-sync-agent.exe ./cmd/syncagent" }
+    )
+    "rg-report-engine" = @(
+        @{ name = "Bundle Install"; cmd = "bundle install" },
+        @{ name = "Lint"; cmd = "bundle exec rubocop" },
+        @{ name = "Test"; cmd = "bundle exec rspec --format documentation" }
+    )
+}
 
 foreach ($service in $services) {
     foreach ($env in $environments) {
         $btId = "$($service.name -replace '-', '_')_$($env.name)"
         $btName = "$($service.name)-$($env.name)"
 
-        Write-Host "  Attaching VCS to $btName..." -ForegroundColor Gray
+        # Attach VCS root
+        Write-Host "  ${btName}: attaching VCS..." -ForegroundColor Gray
         try {
             $vcsEntry = '{"vcs-root": {"id": "' + $vcsRootId + '"}}'
             Invoke-RestMethod -Uri "$TeamCityUrl/app/rest/buildTypes/$btId/vcs-root-entries" -Headers $headers -Method Post -Body $vcsEntry | Out-Null
             Write-Host "    VCS attached" -ForegroundColor Green
         } catch {
-            Write-Host "    Error: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "    VCS error: $($_.Exception.Message)" -ForegroundColor Red
         }
-    }
-}
 
-# ================================================================
-# 5. ADD TRIGGERS (VCS trigger with branch filter)
-# ================================================================
-Write-Host "`n[5/5] Adding VCS triggers..." -ForegroundColor Yellow
-
-foreach ($service in $services) {
-    foreach ($env in $environments) {
-        $btId = "$($service.name -replace '-', '_')_$($env.name)"
-        $btName = "$($service.name)-$($env.name)"
-
-        Write-Host "  Adding trigger to $btName..." -ForegroundColor Gray
+        # Add VCS trigger with branch filter
+        Write-Host "  ${btName}: adding trigger..." -ForegroundColor Gray
         try {
             $triggerBody = @{
                 type = "vcsTrigger"
@@ -196,7 +197,31 @@ foreach ($service in $services) {
             Invoke-RestMethod -Uri "$TeamCityUrl/app/rest/buildTypes/$btId/triggers" -Headers $headers -Method Post -Body $triggerBody | Out-Null
             Write-Host "    Trigger added" -ForegroundColor Green
         } catch {
-            Write-Host "    Error: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "    Trigger error: $($_.Exception.Message)" -ForegroundColor Red
+        }
+
+        # Add build steps
+        $steps = $serviceSteps[$service.name]
+        foreach ($step in $steps) {
+            Write-Host "  ${btName}: adding step '$($step.name)'..." -ForegroundColor Gray
+            try {
+                $stepBody = @{
+                    name = $step.name
+                    type = "simpleRunner"
+                    properties = @{
+                        property = @(
+                            @{ name = "script.content"; value = $step.cmd },
+                            @{ name = "teamcity.step.mode"; value = "default" },
+                            @{ name = "use.custom.script"; value = "true" }
+                        )
+                    }
+                } | ConvertTo-Json -Depth 5
+
+                Invoke-RestMethod -Uri "$TeamCityUrl/app/rest/buildTypes/$btId/steps" -Headers $headers -Method Post -Body $stepBody | Out-Null
+                Write-Host "    Step added" -ForegroundColor Green
+            } catch {
+                Write-Host "    Step error: $($_.Exception.Message)" -ForegroundColor Red
+            }
         }
     }
 }
@@ -204,15 +229,14 @@ foreach ($service in $services) {
 # ================================================================
 # SUMMARY
 # ================================================================
-Write-Host "`n=== Setup complete! ===" -ForegroundColor Green
-Write-Host "  Project: $projectName"
+Write-Host "`n[4/4] Setup complete!" -ForegroundColor Green
+Write-Host ""
+Write-Host "=== Created in project: $projectName ===" -ForegroundColor Cyan
 Write-Host "  VCS Root: $vcsRootName -> $GitHubUrl"
-Write-Host "  18 build configs created (6 services x dev/staging/prod)"
+Write-Host "  18 build configs (6 services x dev/staging/prod)"
 Write-Host ""
 Write-Host "=== Next Steps ===" -ForegroundColor Yellow
 Write-Host "  1. Open TeamCity at $TeamCityUrl"
-Write-Host "  2. Go to each build config -> Build Steps -> add the actual build commands"
-Write-Host "     e.g. go: 'go build -o bin/server ./cmd/server' (working dir: rg-workorder-service)"
-Write-Host "  3. If the repo is private, set the GitHub PAT in the VCS root settings"
-Write-Host "  4. Create dev and staging branches in GitHub"
-Write-Host "  5. Set up GitHub branch protection rules"
+Write-Host "  2. Go to each build config -> Build Steps -> set Working directory to the service folder"
+Write-Host "  3. Create dev and staging branches in GitHub"
+Write-Host "  4. Set up GitHub branch protection rules"
