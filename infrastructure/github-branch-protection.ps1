@@ -16,9 +16,11 @@ $ErrorActionPreference = "Stop"
 # Load credentials from .env
 $envFile = Join-Path $PSScriptRoot ".env"
 if (Test-Path $envFile) {
-    Get-Content $envFile | ForEach-Object {
-        if ($_ -match '^\s*([A-Z_]+)="?(.+?)"?\s*$') {
-            Set-Variable -Name $Matches[1] -Value $Matches[2] -Scope Script
+    foreach ($line in Get-Content $envFile) {
+        if ($line -match '^\s*([A-Z_]+)="?(.+?)"?\s*$') {
+            $envName = $Matches[1]
+            $envValue = $Matches[2]
+            Set-Variable -Name $envName -Value $envValue -Scope Script
         }
     }
 }

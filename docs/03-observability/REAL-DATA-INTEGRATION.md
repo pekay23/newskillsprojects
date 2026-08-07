@@ -31,16 +31,13 @@ Use a Neon **preview branch** with the same schema/data as production, so you ca
 **Your preview branch is already created:**
 
 - **Branch name:** `services_test`
-- **Connection string:**
-  ```
-  postgresql://neondb_owner:npg_6NuRrdpeUC4S@ep-muddy-morning-ah530x58-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
-  ```
+- **Connection string:** (stored in `infrastructure/.env` — gitignored, never committed)
 
 Point services at the branch instead of production:
 
 ```powershell
 # From the repo root
-$env:NEON_URL = "postgresql://neondb_owner:npg_6NuRrdpeUC4S@ep-muddy-morning-ah530x58-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+$env:NEON_URL = (Get-Content infrastructure/.env | Where-Object { $_ -match '^NEON_URL=' }) -replace '^NEON_URL="?', '' -replace '"$', ''
 docker compose up -d workorder-service cmms-service helpdesk-service
 ```
 

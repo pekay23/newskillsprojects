@@ -9,7 +9,15 @@
 # The services_test preview branch connection string.
 # NOTE: channel_binding=require is intentionally omitted — Npgsql (.NET CMMS)
 # cannot parse it. sslmode=require is sufficient for Neon.
-$env:NEON_URL = "postgresql://neondb_owner:npg_6NuRrdpeUC4S@ep-muddy-morning-ah530x58-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require"
+# Load NEON_URL from .env (gitignored) - do not hardcode credentials
+$envFile = Join-Path $PSScriptRoot ".env"
+if (Test-Path $envFile) {
+    $env:NEON_URL = (Get-Content $envFile | Where-Object { $_ -match '^NEON_URL=' }) -replace '^NEON_URL="?', '' -replace '"$', ''
+}
+if (-not $env:NEON_URL) {
+    Write-Error "NEON_URL not found. Set it in infrastructure/.env"
+    exit 1
+}
 
 Write-Host "NEON_URL set to the services_test preview branch:"
 Write-Host "  $env:NEON_URL"
