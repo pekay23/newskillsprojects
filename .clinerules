@@ -4,6 +4,16 @@
 - Do not repeat previous solutions or re-verify closed tasks in subsequent responses.
 - Focus 100% of your response size and analysis on the most recent question asked.
 
+# Contribution & Branch Rules (MANDATORY)
+
+- **READ `CONTRIBUTING.md` at the repo root before making any commit.**
+- Follow the branch strategy: `feature/*` → `dev` → `staging` → `main`.
+- Never push directly to `dev`, `staging`, or `main` — always use a reviewed Pull Request.
+- Use Conventional Commits: `feat(scope):`, `fix(scope):`, `docs:`, `refactor:`, `test:`, `chore:`, `security:`.
+- Never commit secrets, `.env` files, or compiled binaries.
+- Run the build/tests locally for the service you changed before committing.
+- Promotion gates: dev (1 review + dev builds), staging (1 review + staging builds + QA), main (1 review + prod builds + release approval).
+
 # Autonomous Execution & Validation Loop
 - YOU MUST operate in a strict "Plan -> Act -> Validate" cycle for every task.
 - Once a plan is agreed upon, work continuously to execute it without pausing for small text confirmations unless user input is structurally required.
