@@ -142,6 +142,8 @@ jobs:
   publish:
     needs: [build-windows, build-macos]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -158,6 +160,10 @@ jobs:
           name: macos-bundle
           path: macos
 
+      - name: List downloaded files
+        run: |
+          find windows macos -type f 2>/dev/null || echo "No files found"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -165,9 +171,7 @@ jobs:
           name: "Raymond Gray IFM ${{ github.ref_name }}"
           body: "Release ${{ github.ref_name }} of the Raymond Gray IFM desktop app."
           files: |
-            windows/**/*.msi
-            windows/**/*.exe
-            windows/**/*.sig
-            windows/latest.json
-            macos/**/*.dmg
-            macos/**/*.sig
+            windows/**/*
+            macos/**/*
+          fail_on_unmatched_files: false
+          generate_release_notes: true
