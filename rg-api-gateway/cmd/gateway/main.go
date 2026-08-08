@@ -45,6 +45,10 @@ func main() {
 		log.Printf("Failed to initialize JWT middleware (NEXTAUTH_SECRET not set): %v", err)
 	}
 
+	// Public login endpoint - validates credentials against the Neon DB and issues a JWT.
+	// The desktop app posts to /api/auth/callback/credentials.
+	r.Post("/api/auth/callback/credentials", auth.LoginHandler())
+
 	// Protected Routes
 	r.Group(func(r chi.Router) {
 		if authMiddleware != nil {
