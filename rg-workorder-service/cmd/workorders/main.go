@@ -31,6 +31,11 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
+	// 1b. Run migrations / create indexes (SLA composite index for fast queries)
+	if err := repository.Migrate(db); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
+	}
+
 	// 2. Initialize Redis (for Pub/Sub and caching)
 	redisURL := os.Getenv("REDIS_URL")
 	if redisURL == "" {
