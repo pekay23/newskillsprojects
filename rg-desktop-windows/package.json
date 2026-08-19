@@ -10,14 +10,14 @@
     "tauri": "call \"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Auxiliary\\Build\\vcvars64.bat\" >nul 2>&1 && set PATH=%USERPROFILE%\\.cargo\\bin;%PATH% && tauri"
   },
   "dependencies": {
-    "@tauri-apps/api": "2.0.0-rc.0",
+    "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-updater": "^2.10.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.0.0-rc.0",
+    "@tauri-apps/cli": "2.11.4",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^4.2.1",
