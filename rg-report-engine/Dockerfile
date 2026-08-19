@@ -1,4 +1,4 @@
-FROM ruby:3.3-alpine
+FROM ruby:4.0-alpine
 
 # Install build dependencies and postgres client libs
 RUN apk add --no-cache build-base postgresql-dev
