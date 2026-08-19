@@ -24,7 +24,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
 thiserror = "1"
 base64 = "0.22"
-jsonwebtoken = "9"
+jsonwebtoken = "11"
 
 [features]
 # This feature is used for production builds or when a dev server is not specified
