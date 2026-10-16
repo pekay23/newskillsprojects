@@ -1,9 +1,9 @@
 module rg-workorder-service
 
-go 1.23
+go 1.24
 
 require (
-	github.com/go-chi/chi/v5 v5.0.12
+	github.com/go-chi/chi/v5 v5.5.0
 	github.com/google/uuid v1.6.0
 	github.com/redis/go-redis/v9 v9.5.1
 	gorm.io/driver/postgres v1.5.7
